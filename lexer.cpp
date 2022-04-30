@@ -1,5 +1,7 @@
 #include "lexer.hpp"
 
+#include <algorithm>
+
 // std::string to_string( Token token ){
 //     using enum Token;
 //     switch( token ){
@@ -40,6 +42,31 @@ void dictionary::add_word( std::string_view word, Token token, key k ){
     }
     current->token = token;
     current->k = k;
+}
+
+void dictionary::remove_word( std::string_view word ){
+    node* current = root.get();
+    size_t wordIndex = 0;
+
+    while( wordIndex < word.size() ){
+        int childIndex = 0;
+        bool found = false;
+        for( auto& child : current->children ){
+            if( child->c == word[ wordIndex ] ){
+                if( wordIndex == word.size() - 1 ){
+                    current->children.erase( current->children.begin() + childIndex );
+                }
+                current = child.get();
+                ++wordIndex;
+                found = true;
+            }
+            ++childIndex;
+        }
+        if( !found ){
+            return;
+        }
+
+    }
 }
 
 Token dictionary::get_token( std::string_view word, key* k ){
@@ -100,4 +127,5 @@ void lexer::init_keywords(){
 
 void lexer::init_operators(){
     symbols.add_word( "+", Operator, key( Operators::Intplus ) );
+    symbols.add_word( "=", Operator, key( Operators::Equals ) );
 }

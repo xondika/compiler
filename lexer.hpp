@@ -9,6 +9,7 @@
 #include <vector>
 
 enum class Token {
+    None,
     Type,
     Keyword,
     Operator,
@@ -20,23 +21,24 @@ enum class Token {
     Popen,
     Pclose,
     Copen,
-    Cclose,
-    None
+    Cclose
 };
 
 enum class Types {
-    Int,
-    None
+    None,
+    Int
 };
 
 enum class Keywords {
+    None,
     Return,
-    None
+    Declaration
 };
 
 enum class Operators {
+    None,
     Intplus,
-    None
+    Equals
 };
 
 //std::map< Token, std::map< std::string,  > >
@@ -66,6 +68,8 @@ class dictionary {
 
     void add_word( std::string_view word, Token token, key k = 0 );
 
+    void remove_word( std::string_view word );
+
     Token get_token( std::string_view word, key* k = nullptr );
 
     void print_tokens( node* current = nullptr, std::string str = "" );
@@ -74,7 +78,7 @@ class dictionary {
 struct function {
     std::string name;
     Types type;
-    std::vector< Types > arguments;
+    std::vector< Types > variables;
 };
 
 class parser;

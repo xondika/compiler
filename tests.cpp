@@ -29,7 +29,7 @@ int main(){
         std::cout << "Function: " << func << '\n';
         for( auto t : trips ){
             std::cout << " Keyword: " << int( t.keyword ) << " Op: " << int( t.op ) << '\n'
-                << " token1: " << int( t.arg1.first ) << '\n';
+                << " token1: " << int( t.arg1.first ) << " token2: " << int( t.arg2.first ) << '\n';
         }
     }
     p.translate( "out.s" );

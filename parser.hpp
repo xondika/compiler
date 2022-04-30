@@ -58,6 +58,7 @@ class parser {
     void parse_args( function& f );
     std::vector< std::unique_ptr< ast_node > > parse_expressions();
     ast_node parse_expr( std::string str );
+    ast_node parse_declaration( std::string str );
     //ast_node parse_value( std::string str );
     void eat_char( char expected );
     void skipws();
@@ -66,6 +67,6 @@ class parser {
                    std::map< key, std::vector< triple > >& functions,
                    key index = 0 );
 
-    std::string to_instructions( triple t, std::string indent = "" );
+    std::string to_instructions( triple t, std::string indent = "", key fkey = 0 );
     std::string to_instruction( Token token, key k );
 };
