@@ -17,6 +17,8 @@ enum class Token {
     Literal,
     Expression,
     Function,
+    Root,
+    Argument,
     Semicolon,
     Popen,
     Pclose,
@@ -38,7 +40,11 @@ enum class Keywords {
 enum class Operators {
     None,
     Intplus,
-    Equals
+    Intmin,
+    Intdiv,
+    Intmul,
+    Equals,
+    Call
 };
 
 //std::map< Token, std::map< std::string,  > >
@@ -78,6 +84,7 @@ class dictionary {
 struct function {
     std::string name;
     Types type;
+    std::vector< Types > arguments;
     std::vector< Types > variables;
 };
 

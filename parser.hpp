@@ -32,7 +32,7 @@ struct ast_node {
 struct triple{
     Keywords keyword = Keywords::None;
     Operators op = Operators::None;
-    std::pair< Token, key > arg1 = { Token::None, 0 }, arg2 = { Token::None, 0 };
+    std::vector< std::pair< Token, key > > args;
 };
 
 class parser {
@@ -42,6 +42,9 @@ class parser {
     lexer lex;
     std::ifstream file;
     std::ofstream output_file;
+
+    bool eax_full = false;
+    size_t line = 1;
 
   public:
     void parse( std::string path );
@@ -55,7 +58,7 @@ class parser {
   private:
     ast_node parse_root();
     ast_node parse_function();
-    void parse_args( function& f );
+    void parse_args( function& f, bool definition = false );
     std::vector< std::unique_ptr< ast_node > > parse_expressions();
     ast_node parse_expr( std::string str );
     ast_node parse_declaration( std::string str );
@@ -68,5 +71,10 @@ class parser {
                    key index = 0 );
 
     std::string to_instructions( triple t, std::string indent = "", key fkey = 0 );
-    std::string to_instruction( Token token, key k );
+    std::string to_instruction( Token token, key k, key fkey = 0 );
+
+    std::string arithmetic( triple t, std::string op,
+                            std::string s1, std::string s2, std::string indent );
+
+    void error( std::string str );
 };

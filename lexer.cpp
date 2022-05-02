@@ -128,4 +128,7 @@ void lexer::init_keywords(){
 void lexer::init_operators(){
     symbols.add_word( "+", Operator, key( Operators::Intplus ) );
     symbols.add_word( "=", Operator, key( Operators::Equals ) );
+    symbols.add_word( "*", Operator, key( Operators::Intmul ) );
+    symbols.add_word( "-", Operator, key( Operators::Intmin ) );
+    symbols.add_word( "/", Operator, key( Operators::Intdiv ) );
 }
