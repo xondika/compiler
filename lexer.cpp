@@ -110,11 +110,6 @@ lexer::lexer(){
 }
 
 void lexer::init_tokens(){
-    symbols.add_word( ";", Semicolon );
-    symbols.add_word( "(", Popen );
-    symbols.add_word( ")", Pclose );
-    symbols.add_word( "{", Copen );
-    symbols.add_word( "}", Cclose );
 }
 
 void lexer::init_types(){
@@ -123,6 +118,7 @@ void lexer::init_types(){
 
 void lexer::init_keywords(){
     symbols.add_word( "return", Keyword, key( Keywords::Return ) );
+    symbols.add_word( "if", If, 0 );
 }
 
 void lexer::init_operators(){

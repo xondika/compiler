@@ -19,22 +19,21 @@ enum class Token {
     Function,
     Root,
     Argument,
-    Semicolon,
-    Popen,
-    Pclose,
-    Copen,
-    Cclose
+    If
 };
 
 enum class Types {
     None,
-    Int
+    Int,
+    Char
 };
 
 enum class Keywords {
     None,
     Return,
-    Declaration
+    Declaration,
+    Ifjump,
+    Label
 };
 
 enum class Operators {
@@ -44,7 +43,8 @@ enum class Operators {
     Intdiv,
     Intmul,
     Equals,
-    Call
+    Call,
+    Branch
 };
 
 //std::map< Token, std::map< std::string,  > >

@@ -24,6 +24,7 @@ struct ast_node {
     Token token = Token::None;
     key k = 0;
     std::vector< std::unique_ptr< ast_node > > children;
+    //bool reused = false;
 
     ast_node() = default;
     ast_node( Token t, key k ) : token( t ), k( k ) {}
@@ -32,7 +33,14 @@ struct ast_node {
 struct triple{
     Keywords keyword = Keywords::None;
     Operators op = Operators::None;
+    //Token token = Token::None;
     std::vector< std::pair< Token, key > > args;
+    bool reused = false;
+
+    triple() = default;
+    //triple( Token t ) : token( t ){}
+    triple( Keywords kw ) : keyword( kw ){}
+    triple( Operators op ) : op( op ){}
 };
 
 class parser {
@@ -45,6 +53,7 @@ class parser {
 
     bool eax_full = false;
     size_t line = 1;
+    size_t lbl = 0;
 
   public:
     void parse( std::string path );
@@ -76,5 +85,6 @@ class parser {
     std::string arithmetic( triple t, std::string op,
                             std::string s1, std::string s2, std::string indent );
 
+    std::string div( triple t, std::string s1, std::string s2, std::string indent );
     void error( std::string str );
 };

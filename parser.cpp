@@ -68,6 +68,7 @@ void parser::parse_args( function& f, bool definition ){
             file.get();
             c = file.peek();
         }
+        skipws();
         if( c == ',' ){
             file.get();
         }
@@ -84,11 +85,30 @@ std::vector< std::unique_ptr< ast_node > > parser::parse_expressions(){
     std::vector< std::unique_ptr< ast_node > > result;
     std::string expr;
     char c;
+    key k;
+
     while( ( c = file.peek() ) != '}' ){
         //std::cout << "wat\n";
+        bool is_if = false;
         while( ( c = file.get() ) != ';' ){
             expr += c;
+            if( lex.symbols.get_token( expr, &k ) == If ){
+                std::string condition;
+                eat_char( '(' );
+                while( ( c = file.get() ) != ')' ){
+                    condition += c;
+                }
+                eat_char( '{' );
+                ast_node if_node = { If, 0 };
+                if_node.children = parse_expressions();
+                if_node.children.insert( if_node.children.begin(),
+                                         std::make_unique< ast_node >( parse_expr( condition ) ) );
+                eat_char( '}' );
+                result.push_back( std::make_unique< ast_node >( std::move( if_node ) ) );
+                expr = "";
+            }
         }
+
         auto child = std::make_unique< ast_node >( parse_expr( expr ) );
         if( !child->children.empty() ){
             result.push_back( std::move( child ) );
@@ -135,6 +155,13 @@ std::string remove_brackets( std::string str ){
     }
     return remove_brackets( { str.begin() + 1, str.end() - 1 } );
 }
+
+void skipws( std::stringstream& ss ){
+    while( isspace( ss.peek() ) ){
+        ss.get();
+    }
+}
+
 ast_node parser::parse_expr( std::string str ){
     std::string word;
     if( !str.empty() ){
@@ -170,10 +197,11 @@ ast_node parser::parse_expr( std::string str ){
         //throw std::invalid_argument( std::string("Invalid expression: ") + word );
 
         expr.children.emplace_back( std::make_unique< ast_node >( token, k ) );
-
         std::string remainder;
+        char c;
         std::getline( ss, remainder, ';' );
         expr.children.emplace_back( std::make_unique< ast_node >( parse_expr( remainder ) ) );
+
     }
     else if( token == Type ){
         expr.children.emplace_back( std::make_unique< ast_node >( parse_declaration( str ) ) );
@@ -324,24 +352,49 @@ void parser::traverse(
 
         for( int i = 1; i < current->children.size(); ++i ){
             if( current->children[ i ]->token == Expression ){
-                exp.args.emplace_back( Expression, functions[ index ].size() );
                 traverse( current->children[ i ].get(), functions, index );
+                exp.args.emplace_back( Expression, functions[ index ].size() - 1 );
             } else {
-                // std::cout << "token: " << key( current->children[ i ]->token ) <<
-                //     " key: " << current->children[ i ]->k << '\n';
                 exp.args.emplace_back( current->children[ i ]->token,
                                        current->children[ i ]->k );
             }
         }
 
+        for( auto [ t, k ] : exp.args ){
+            if( t != Expression ) continue;
+            if( k != functions[ index ].size() - 1 ){
+                functions[ index ][ k ].reused = true;
+            }
+        }
         functions[ index ].push_back( exp );
+    }
+    if( current->token == If ){
+        triple cond( Keywords::Ifjump );
+        if( current->children.front()->token == Expression ){
+            traverse( current->children.front().get(), functions, index );
+            cond.args.emplace_back( Expression, functions[ index ].size() - 1 );
+        } else {
+            cond.args.emplace_back( current->children.front()->token,
+                                    current->children.front()->k );
+        }
+        functions[ index ].push_back( cond );
+        //functions[ index ].emplace_back( Keywords::Ifjump );
+        for( int i = 1; i < current->children.size(); ++i ){
+            // if( current->children.front()->token == Expression ){
+                 traverse( current->children[ i ].get(), functions, index );
+            //     exp.args.emplace_back( Expression, functions[ index ].size() - 1 );
+            // } else {
+            //     exp.args.emplace_back( current->children[ i ]->token,
+            //                            current->children[ i ]->k );
+            // }
+        }
+        functions[ index ].emplace_back( Keywords::Label );
     }
 }
 
 std::map< key, std::vector< triple > > parser::to_triples(){
     print_ast();
     std::map< key, std::vector< triple > > functions;
-    //ast_node* current = root.get();
     for( auto& child : root->children ){
         traverse( child.get(), functions, 0 );
     }
@@ -350,37 +403,61 @@ std::map< key, std::vector< triple > > parser::to_triples(){
 
 std::string parser::arithmetic( triple t, std::string op, std::string s1, std::string s2,
                                 std::string indent ){
-    std::string result;
+    std::string push;
 
+    if( t.reused ){
+        push += indent + "push %eax\n";
+    }
     if( t.args[ 0 ].first == Token::Expression
      && t.args[ 1 ].first == Token::Expression )
     {
         return indent + "mov %eax, %edx\n" + indent + "pop %eax\n"
-            + indent + op + " %edx, %eax\n";
-    }
-    // TODO: if result is used again, push it
-    // if( eax_full ){
-    //     result += indent + "push %eax\n";
-    // }
-    // eax_full = true;
-    if( t.args[ 0 ].first == Token::Expression ){
-        return result + indent + op + " " + s2
-            + ", %eax\n";
-    }
-    if( t.args[ 1 ].first == Token::Expression ){
-        result += indent + "mov " + s1 + ", %edx\n";
-        return result + indent + op + " "
-            + "%edx, %eax\n";
+            + indent + op + " %edx, %eax\n" + push;
     }
 
-    return result + indent + "mov " + s1 + ", %eax\n" + indent +
+    if( t.args[ 0 ].first == Token::Expression ){
+        return indent + op + " " + s2
+            + ", %eax\n" + push;
+    }
+    if( t.args[ 1 ].first == Token::Expression ){
+        std::string begin = indent + "mov %eax, %edx\n" + indent + "mov " + s1 + ", %eax\n";
+        return begin + indent + op + " "
+            + "%edx, %eax\n" + push;
+    }
+
+    return indent + "mov " + s1 + ", %eax\n" + indent +
         "mov " + s2
-        + ", %edx\n" + indent + op + " %edx, %eax\n";
+        + ", %edx\n" + indent + op + " %edx, %eax\n" + push;
 
 }
 
+std::string parser::div( triple t, std::string s1, std::string s2,
+                         std::string indent )
+{
+    std::string clear = indent + "xor %edx, %edx\n";
+    std::string push;
+    if( t.reused ){
+        push = indent + "push %eax\n";
+    }
+    if( t.args[ 0 ].first == Expression && t.args[ 1 ].first == Expression ){
+        return clear + indent + "mov %eax, %ebx\n" + indent + "pop %eax\n"
+            + indent + "div %ebx\n" + push;
+    }
+    if( t.args[ 0 ].first == Expression ){
+        return clear +
+            indent + "mov " + s2 + ", %ebx\n" + indent + "div %ebx" + "\n"
+            + push;
+    }
+    if( t.args[ 1 ].first == Expression ){
+        return clear + indent + "mov %eax, %ebx\n" +
+            indent + "mov " + s1 + ", %eax\n" + indent + "div %ebx\n" + push;
+    }
+    return clear + indent + "mov " + s2 + ", %ebx\n" + indent + "mov " + s1 + ", %eax\n"
+        + indent + "div %ebx\n" + push;
+}
+
 std::string parser::to_instructions( triple t, std::string indent, key fkey ){
-//    std::cout << key( t.keyword ) << "op: " << key( t.op ) << " size: " << t.args.size() << '\n';
+    //std::cout << key( t.keyword ) << "op: " << key( t.op ) << " size: " << t.args.size() << '\n';
     std::string s1 = t.args.size() == 0 ? "" :
         to_instruction( t.args[ 0 ].first, t.args[ 0 ].second, fkey );
     std::string s2 = t.args.size() < 1 ? "" :
@@ -388,6 +465,7 @@ std::string parser::to_instructions( triple t, std::string indent, key fkey ){
 
     std::string result;
     size_t pop = 0;
+
     if( t.keyword != Keywords::None ){
         using enum Keywords;
         switch( Keywords( t.keyword ) ){
@@ -406,6 +484,16 @@ std::string parser::to_instructions( triple t, std::string indent, key fkey ){
                         + "\n";
                 }
                 return indent + "push $0\n";
+            case Ifjump:
+                if( t.args[ 0 ].first == Expression ){
+                    return indent + "mov $0, %ebx\n" + indent + "cmp %ebx, %eax\n"
+                        + indent + "je lbl" + std::to_string( lbl ) + "\n";
+                }
+                return indent + "mov $0, %ebx\n"
+                    + indent + "cmp " + s1 + ", %ebx\n"
+                    + indent + "je lbl" + std::to_string( lbl ) + "\n";
+            case Label:
+                return "lbl" + std::to_string( lbl++ ) + ":\n";
             default:
                 throw std::exception();
         }
@@ -416,10 +504,10 @@ std::string parser::to_instructions( triple t, std::string indent, key fkey ){
                 return arithmetic( t, "add", s1, s2, indent );
             case Intmin:
                 return arithmetic( t, "sub", s1, s2, indent );
-            case Intdiv:
-                return arithmetic( t, "idiv", s1, s2, indent );
             case Intmul:
                 return arithmetic( t, "imul", s1, s2, indent );
+            case Intdiv:
+                return div( t, s1, s2, indent );
             case Equals:
                 if( t.args[ 1 ].first == Expression ){
                     return indent + "mov %eax, " + s1 + '\n';
@@ -429,9 +517,14 @@ std::string parser::to_instructions( triple t, std::string indent, key fkey ){
             case Call:
                 for( size_t i = t.args.size() - 1; i > 0; --i ){
                     if( t.args[ i ].first != Token::None ){
-                        result += indent + "push "
-                            + to_instruction( t.args[ i ].first, t.args[ i ].second, fkey )
-                            + "\n";
+                        if( t.args[ i ].first == Expression ){
+                            result += indent + "push %eax\n";
+                        } else {
+                            result += indent + "push "
+                                + to_instruction( t.args[ i ].first, t.args[ i ].second, fkey )
+                                + "\n";
+                        }
+
                         pop += 4;
                     }
                 }
@@ -448,9 +541,6 @@ std::string parser::to_instruction( Token token, key k, key fkey ){
             return std::to_string( 4 * ( lex.functions[ fkey ].variables.size() + 1 + k ) )
                 + "(%esp)";
         case Identifier:
-            // if( k == 0 ){
-            //     return "(%esp)";
-            // }
             return std::to_string( 4 * ( lex.functions[ fkey ].variables.size() - 1 - k ) )
                 + "(%esp)";
         case Keyword:
@@ -476,9 +566,6 @@ void parser::translate( std::string path ){
     std::string header = ".text\n    .global _start\n";
 
     std::string init = "_start:\n  call _main\n";
-    // output += "  push $'\\n'\n  push $0x31\n  movl $4, %eax\n"
-    //     "  movl $1, %ebx\n  mov %esp, %ecx\n  movl $5, %edx\n  int $0x80\n"
-    //     "  movl $1, %eax\n  movl $0, %ebx\n  int $0x80\n";
 
     init += "  mov %eax, %ebx\n  mov $1, %eax\n  int $0x80\n\n";
 
