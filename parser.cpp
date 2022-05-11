@@ -1,6 +1,7 @@
 #include "parser.hpp"
 
 #include <cassert>
+#include <string>
 #include <sstream>
 
 void parser::parse( std::string path ){
@@ -58,7 +59,7 @@ void parser::parse_args( function& f, bool definition ){
         key k;
         Token token = lex.symbols.get_token( word, &k );
         if( token != Type ){
-            error( word + "does not name a type." );
+            error( word + " does not name a type." );
         }
         skipws();
         char c = file.peek();
@@ -109,7 +110,17 @@ std::vector< std::unique_ptr< ast_node > > parser::parse_expressions(){
             }
         }
 
-        auto child = std::make_unique< ast_node >( parse_expr( expr ) );
+        expr = desugar( expr );
+        std::string current = "";
+        for( char c : expr ){
+            if( c == '|' ){
+                result.emplace_back( std::make_unique< ast_node >( parse_expr( current ) ) );
+                current = "";
+            } else {
+                current += c;
+            }
+        }
+        auto child = std::make_unique< ast_node >( parse_expr( current ) );
         if( !child->children.empty() ){
             result.push_back( std::move( child ) );
         }
@@ -124,12 +135,10 @@ std::string cut_spaces( std::string str ){
     size_t begin = 0;
     size_t end = str.size() - 1;
 
-    while( std::isspace( str[ end ] ) // || str[ end ] == ')'
-           ){
+    while( std::isspace( str[ end ] ) ){
         --end;
     }
-    while( std::isspace( str[ begin ] ) // || str[ begin ] == '('
-           ){
+    while( std::isspace( str[ begin ] ) ){
         ++begin;
     }
 
@@ -162,20 +171,56 @@ void skipws( std::stringstream& ss ){
     }
 }
 
-ast_node parser::parse_expr( std::string str ){
+std::string parser::desugar( std::string str ){
+    std::string result;
     std::string word;
-    if( !str.empty() ){
-        std::cout << str << '\n';
+    size_t i = 0;
+    str = cut_spaces( str );
+    while( i != str.size() && !isspace( str[ i ] ) ){
+        word += str[ i++ ];
     }
+    if( word == "printn" ){
+        word = "";
+        while( isspace( str[ i ] ) ){
+            ++i;
+        }
+//        if( isdigit( str[ i ] ) ){
+            while( i != str.size() ){
+                if( !isdigit( str[ i ] ) ){
+                    error( "printn expecting a number, got: " + str );
+                }
+                result += "print " + std::to_string( int( str[ i ] ) ) + "|";
+                ++i;
+            }
+        // } else {
+        //     while( i != str.size() ){
+        //         word += str[ i ];
+        //     }
+        //     if( lex.symbols.get_token( word ) != Identifier ){
+        //         error( "printn expecting a number or identifier, got: " + word );
+        //     }
+        //     result += "int __new = " + word + "+ 0|";
 
+        // }
+
+        result += "print 10";
+    } else {
+        return str;
+    }
+    return result;
+}
+
+ast_node parser::parse_expr( std::string str ){
+    //std::cout << str << '\n';
+    std::string word;
 
     str = cut_spaces( str );
     str = remove_brackets( str );
+
     if( str.empty() ){
         return { None, 0 };
     }
     if( std::all_of( str.begin(), str.end(), []( char c ){ return isdigit( c ); } ) )
-     //|| std::all_of( str.begin() + 1, str.end(), []( char c ){ return isdigit( c ); } )
     {
         lex.integers.push_back( std::stoi( str ) );
         return { Literal, lex.integers.size() - 1 };
@@ -198,7 +243,6 @@ ast_node parser::parse_expr( std::string str ){
 
         expr.children.emplace_back( std::make_unique< ast_node >( token, k ) );
         std::string remainder;
-        char c;
         std::getline( ss, remainder, ';' );
         expr.children.emplace_back( std::make_unique< ast_node >( parse_expr( remainder ) ) );
 
@@ -208,8 +252,8 @@ ast_node parser::parse_expr( std::string str ){
         std::string remainder;
         std::getline( ss, remainder, ';' );
         auto assign = parse_expr( remainder );
-        //expr.children.push_back( std::make_unique< ast_node >( std::move( assign ) ) );
-        if( assign.children.front()->token == Operator
+        if( assign.children.size() > 0
+         && assign.children.front()->token == Operator
          && assign.children.front()->k == key( Operators::Equals ) )
         {
             expr.children.emplace_back( std::make_unique< ast_node >( std::move( *assign.children[ 2 ] ) ) );
@@ -232,6 +276,9 @@ ast_node parser::parse_expr( std::string str ){
         while( brackets != 0 ){
             while( c != ',' )
             {
+                if( c == std::char_traits<char>::eof() ){
+                    error( "Missing a closing bracket in: " + str );
+                }
                 if( c == '(' ){
                     brackets++;
                 }
@@ -271,7 +318,7 @@ ast_node parser::parse_expr( std::string str ){
                 }
             }
             if( !( ss >> word ) ){
-                error( "Expected operator, found none in: " + str );
+                error( "Unrecognized expression: " + str );
             }
             token = lex.symbols.get_token( word, &k );
         }
@@ -284,7 +331,7 @@ ast_node parser::parse_expr( std::string str ){
     return expr;
 }
 
-// ast_node parser::parse_callargs( std::string str ){
+// ast_node parser::parse_lcallargs( std::string str ){
 
 // }
 
@@ -322,8 +369,8 @@ void parser::skipws(){
 }
 
 void print( ast_node* current, std::string indent ){
-    std::cout << indent << "Token: " << int( current->token ) <<
-        " key: " << current->k << '\n';
+    // std::cout << indent << "Token: " << int( current->token ) <<
+    //     " key: " << current->k << '\n';
     for( auto& child : current->children ){
         print( child.get(), indent + " " );
     }
@@ -378,15 +425,9 @@ void parser::traverse(
                                     current->children.front()->k );
         }
         functions[ index ].push_back( cond );
-        //functions[ index ].emplace_back( Keywords::Ifjump );
+
         for( int i = 1; i < current->children.size(); ++i ){
-            // if( current->children.front()->token == Expression ){
-                 traverse( current->children[ i ].get(), functions, index );
-            //     exp.args.emplace_back( Expression, functions[ index ].size() - 1 );
-            // } else {
-            //     exp.args.emplace_back( current->children[ i ]->token,
-            //                            current->children[ i ]->k );
-            // }
+            traverse( current->children[ i ].get(), functions, index );
         }
         functions[ index ].emplace_back( Keywords::Label );
     }
@@ -460,7 +501,7 @@ std::string parser::to_instructions( triple t, std::string indent, key fkey ){
     //std::cout << key( t.keyword ) << "op: " << key( t.op ) << " size: " << t.args.size() << '\n';
     std::string s1 = t.args.size() == 0 ? "" :
         to_instruction( t.args[ 0 ].first, t.args[ 0 ].second, fkey );
-    std::string s2 = t.args.size() < 1 ? "" :
+    std::string s2 = t.args.size() < 2 ? "" :
         to_instruction( t.args[ 1 ].first, t.args[ 1 ].second, fkey );
 
     std::string result;
@@ -471,15 +512,18 @@ std::string parser::to_instructions( triple t, std::string indent, key fkey ){
         switch( Keywords( t.keyword ) ){
             case Return:
                 if( t.args[ 0 ].first == Token::Expression ){
-                    return indent + "ret\n";
+                    return indent + indent + "add $" +
+                        std::to_string( lex.functions[ fkey ].variables.size() * 4 ) +
+                        ", %esp\n" + indent + "ret\n";
                 }
                 return indent + "mov " + s1 +
-                       ", %eax\n" + // indent + "add $" +
-                       // std::to_string( lex.functions[ fkey ].variables.size() * 4 ) +
-                       // ", %esp\n" +
+                       ", %eax\n" +  indent + "add $" +
+                        std::to_string( lex.functions[ fkey ].variables.size() * 4 ) +
+                        ", %esp\n" +
                        indent + "ret\n";
             case Declaration:
-                if( t.args[ 0 ].first != Token::None ){
+                if( t.args.size() > 0 ){
+                //if( t.args[ 0 ].first != Token::None ){
                     return indent + "push " + s1
                         + "\n";
                 }
@@ -494,6 +538,29 @@ std::string parser::to_instructions( triple t, std::string indent, key fkey ){
                     + indent + "je lbl" + std::to_string( lbl ) + "\n";
             case Label:
                 return "lbl" + std::to_string( lbl++ ) + ":\n";
+            case Print:
+                // if( t.args[ 0 ].first == Expression ){
+                //     return indent + "push %eax\n"
+                //         + indent + "movl $4, %eax\n " + indent + "movl $1, %ebx\n"
+                //         + indent + "mov %esp, %ecx\n" + indent +
+                //         "movl $4, %edx\n" + indent + "int $0x80\n" + indent + "add $4, %esp\n";
+                // }
+                // if( t.args[ 0 ].first == Literal ){
+                    return indent + "push " + s1 + "\n"
+                        + indent + "movl $4, %eax\n " + indent + "movl $1, %ebx\n"
+                        + indent + "mov %esp, %ecx\n" + indent +
+                        "movl $4, %edx\n" + indent + "int $0x80\n" + indent + "add $4, %esp\n";
+                // }
+                // result = "";
+                // for( char c : s1 ){
+                //     if( isdigit( c ) )
+                //         result += c;
+                //     else
+                //         break;
+                // }
+                // return indent + "mov " + s1 + ", %ecx\n"
+                //         + indent + "movl $4, %eax\n" + indent + "movl $1, %ebx\n"
+                //         + indent + "movl $4, %edx\n" + indent + "int $0x80\n";
             default:
                 throw std::exception();
         }
@@ -537,6 +604,8 @@ std::string parser::to_instructions( triple t, std::string indent, key fkey ){
 
 std::string parser::to_instruction( Token token, key k, key fkey ){
     switch( token ){
+        case Expression:
+            return "%eax";
         case Argument:
             return std::to_string( 4 * ( lex.functions[ fkey ].variables.size() + 1 + k ) )
                 + "(%esp)";
@@ -592,6 +661,6 @@ void parser::translate( std::string path ){
 }
 
 void parser::error( std::string str ){
-    std::cerr << ( "Error on line: " + std::to_string( line ) + ":\n  " + str + "\n" );
+    std::cerr << ( "Error on line " + std::to_string( line ) + ":\n  " + str + "\n" );
     throw std::invalid_argument( "wat" );
 }

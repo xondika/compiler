@@ -33,6 +33,7 @@ enum class Keywords {
     Return,
     Declaration,
     Ifjump,
+    Print,
     Label
 };
 

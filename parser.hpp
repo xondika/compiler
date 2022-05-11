@@ -74,6 +74,7 @@ class parser {
     //ast_node parse_value( std::string str );
     void eat_char( char expected );
     void skipws();
+    std::string desugar( std::string str );
 
     void traverse( ast_node* current,
                    std::map< key, std::vector< triple > >& functions,

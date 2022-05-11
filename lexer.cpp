@@ -79,9 +79,11 @@ Token dictionary::get_token( std::string_view word, key* k ){
                 current = child.get();
                 ++wordIndex;
                 found = true;
+                break;
             }
         }
         if( !found ){
+    // throw std::exception();
             return None;
         }
     }
@@ -95,7 +97,7 @@ void dictionary::print_tokens( node* current, std::string str ){
         current = root.get();
     }
     if( current->token != None ){
-        std::cout << str << ", " << (int) current->token << '\n';
+        //std::cout << str << ", " << (int) current->token << '\n';
     }
     for( auto& child : current->children ){
         print_tokens( child.get(), str + child->c );
@@ -114,11 +116,16 @@ void lexer::init_tokens(){
 
 void lexer::init_types(){
     symbols.add_word( "int", Type, key( Types::Int ) );
+    symbols.add_word( "char", Type, key( Types::Char ) );
 }
 
 void lexer::init_keywords(){
     symbols.add_word( "return", Keyword, key( Keywords::Return ) );
     symbols.add_word( "if", If, 0 );
+    symbols.add_word( "print", Keyword, key( Keywords::Print ) );
+
+    Token t = symbols.get_token( "print" );
+    //std::cout << "inserted: " << key( t ) << '\n';
 }
 
 void lexer::init_operators(){
